@@ -44,11 +44,8 @@ pub fn show(allocator: std.mem.Allocator, mode: ReportMode, format: OutputFormat
     // Header
     const label = formatRangeLabel(alloc, from, to, mode);
     try writer.writeAll("\n");
-    try writeAnsi(writer, ansi.bold, tty);
-    try writer.print("Activity Report — {s}\n", .{label});
-    try writeAnsi(writer, ansi.reset, tty);
     try writeAnsi(writer, ansi.dim, tty);
-    try writer.writeAll("─────────────────────────────────────────────────────────────────\n");
+    try writer.print("  {s}\n\n", .{label});
     try writeAnsi(writer, ansi.reset, tty);
 
     // Totals
@@ -75,9 +72,10 @@ pub fn show(allocator: std.mem.Allocator, mode: ReportMode, format: OutputFormat
                 if (!std.mem.eql(u8, dr.window_class[0..dr.class_len], name)) continue;
                 const title = dr.window_title[0..dr.title_len];
                 if (title.len == 0) continue;
-                try printDetailTitle(writer, title, dr.total_seconds, tty);
+                try printDetailTitle(writer, title, dr.total_seconds, row.total_seconds, tty);
                 title_count += 1;
             }
+            try writer.writeAll("\n");
         }
     }
 
@@ -85,14 +83,8 @@ pub fn show(allocator: std.mem.Allocator, mode: ReportMode, format: OutputFormat
         try printAppRow(writer, "AFK", afk_seconds, total_tracked, tty);
     }
 
-    // Footer
-    try writeAnsi(writer, ansi.dim, tty);
-    try writer.writeAll("─────────────────────────────────────────────────────────────────\n");
-    try writeAnsi(writer, ansi.reset, tty);
-    try writer.writeAll("  Total tracked:   ");
-    try writeAnsi(writer, ansi.bold, tty);
+    try writer.writeAll("\n                                                            ");
     try printDuration(writer, total_tracked);
-    try writeAnsi(writer, ansi.reset, tty);
     try writer.writeAll("\n\n");
 }
 
@@ -150,8 +142,9 @@ fn writeCsvField(writer: anytype, field: []const u8) !void {
     }
 }
 
-const detail_col = 50; // column where duration starts (after 4-char indent)
-const detail_max = detail_col - 4 - 2; // max display columns for title
+const detail_col = 64;
+const detail_prefix = 6; // "    \u{2014} " = 6 display cols
+const detail_max = detail_col - detail_prefix - 2;
 
 /// Count approximate display width (codepoints, not bytes).
 /// Skips UTF-8 continuation bytes (0x80..0xBF).
@@ -176,21 +169,30 @@ fn truncateToWidth(s: []const u8, max_cols: usize) usize {
     return i;
 }
 
-fn printDetailTitle(writer: anytype, title: []const u8, secs: i64, tty: bool) !void {
+fn printDetailTitle(writer: anytype, title: []const u8, secs: i64, parent_secs: i64, tty: bool) !void {
     try writeAnsi(writer, ansi.dim, tty);
     try writer.writeAll("    ");
+
+    // Vertical block: ▁▂▃▄▅▆▇█ (1/8 to full height)
+    const blocks = [_][]const u8{ "\u{2581}", "\u{2582}", "\u{2583}", "\u{2584}", "\u{2585}", "\u{2586}", "\u{2587}", "\u{2588}" };
+    const idx: usize = if (parent_secs == 0) 0 else blk: {
+        const raw: usize = @intCast(@min(@divTrunc(secs * 7, parent_secs), 7));
+        break :blk raw;
+    };
+    try writer.writeAll(blocks[idx]);
+
+    try writer.writeAll(" ");
+
+    const title_max = detail_max - 2; // block char + space
     const width = displayWidth(title);
-    if (width <= detail_max) {
+    if (width <= title_max) {
         try writer.writeAll(title);
-        var pad: usize = detail_max + 2 - width;
-        while (pad > 0) : (pad -= 1) try writer.writeByte(' ');
     } else {
-        const cut = truncateToWidth(title, detail_max - 3);
+        const cut = truncateToWidth(title, title_max - 1);
         try writer.writeAll(title[0..cut]);
-        try writer.writeAll("...");
-        try writer.writeAll("  ");
+        try writer.writeAll("\u{2026}"); // …
     }
-    try printDuration(writer, secs);
+
     try writeAnsi(writer, ansi.reset, tty);
     try writer.writeAll("\n");
 }
@@ -248,8 +250,6 @@ const ansi = struct {
     const bold = "\x1b[1m";
     const dim = "\x1b[2m";
     const reset = "\x1b[0m";
-    const green = "\x1b[32m";
-    const gray = "\x1b[90m";
 };
 
 fn writeAnsi(writer: anytype, code: []const u8, tty: bool) !void {
@@ -263,36 +263,48 @@ fn printDuration(writer: anytype, total_secs: i64) !void {
     try writer.print("{d}h {d:0>2}m", .{ hours, mins });
 }
 
-const bar_width = 30;
+const bar_width = 24;
 
 fn printBar(writer: anytype, filled: u32, tty: bool) !void {
-    try writeAnsi(writer, ansi.green, tty);
+    _ = tty;
     var i: u32 = 0;
     while (i < bar_width) : (i += 1) {
         if (i < filled) {
-            try writer.writeAll("\u{2588}");
+            try writer.writeAll("\u{2593}"); // ▓ medium shade
         } else {
-            if (i == filled) try writeAnsi(writer, ansi.gray, tty);
-            try writer.writeAll("\u{2591}");
+            try writer.writeAll("\u{2591}"); // ░ light shade
         }
     }
-    try writeAnsi(writer, ansi.reset, tty);
 }
+
+const name_col = 24;
 
 fn printAppRow(writer: anytype, name: []const u8, secs: i64, total: i64, tty: bool) !void {
     if (total == 0) return;
     const pct: u32 = @intCast(@min(@divTrunc(secs * 100, total), 100));
     const bar_len: u32 = @intCast(@min(@divTrunc(secs * bar_width, total), bar_width));
 
-    try writeAnsi(writer, ansi.bold, tty);
-    try writer.print("  {s:<16}", .{name});
-    try writeAnsi(writer, ansi.reset, tty);
+    // Truncate long class names
+    const width = displayWidth(name);
+    try writer.writeAll("  ");
+    if (width <= name_col) {
+        try writer.writeAll(name);
+        var pad: usize = name_col - width;
+        while (pad > 0) : (pad -= 1) try writer.writeByte(' ');
+    } else {
+        const cut = truncateToWidth(name, name_col - 1);
+        try writer.writeAll(name[0..cut]);
+        try writeAnsi(writer, ansi.dim, tty);
+        try writer.writeAll("\u{2026}"); // …
+        try writeAnsi(writer, ansi.reset, tty);
+    }
+
     try writer.writeAll("  ");
     try printDuration(writer, secs);
     try writer.writeAll("  ");
     try printBar(writer, bar_len, tty);
     try writeAnsi(writer, ansi.dim, tty);
-    try writer.print("  {d:>3}%", .{pct});
+    try writer.print("  {d:>2}%", .{pct});
     try writeAnsi(writer, ansi.reset, tty);
     try writer.writeAll("\n");
 }
