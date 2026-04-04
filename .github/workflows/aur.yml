@@ -1,0 +1,127 @@
+name: Publish to AUR
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read Zig version
+        id: zig-version
+        run: echo "version=$(grep '^zig ' .tool-versions | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: ${{ steps.zig-version.outputs.version }}
+
+      - name: Install dependencies
+        run: sudo apt-get install -y libx11-dev libxi-dev libsqlite3-dev
+
+      - name: Build release binary
+        run: zig build -Doptimize=ReleaseSafe
+
+      - name: Upload binary to release
+        run: gh release upload "$GITHUB_REF_NAME" zig-out/bin/ebyt --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute checksums
+        id: meta
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          SRC_SHA=$(curl -sL "https://github.com/barjo/ebyt/archive/v${VERSION}.tar.gz" | sha256sum | awk '{print $1}')
+          BIN_SHA=$(sha256sum zig-out/bin/ebyt | awk '{print $1}')
+          SVC_SHA=$(curl -sL "https://raw.githubusercontent.com/barjo/ebyt/v${VERSION}/ebyt.service" | sha256sum | awk '{print $1}')
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "src_sha=$SRC_SHA" >> "$GITHUB_OUTPUT"
+          echo "bin_sha=$BIN_SHA" >> "$GITHUB_OUTPUT"
+          echo "svc_sha=$SVC_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Generate ebyt PKGBUILD
+        run: |
+          VERSION=${{ steps.meta.outputs.version }}
+          SRC_SHA=${{ steps.meta.outputs.src_sha }}
+          cat > PKGBUILD <<'EOF'
+          pkgname=ebyt
+          pkgver=VERSION_PLACEHOLDER
+          pkgrel=1
+          pkgdesc='Minimal X11 activity tracker'
+          arch=('x86_64')
+          url='https://github.com/barjo/ebyt'
+          license=('Apache-2.0')
+          depends=('libx11' 'libxi' 'sqlite')
+          makedepends=('zig>=0.14.0')
+          provides=('ebyt')
+          conflicts=('ebyt-bin')
+          options=(!debug)
+          source=("$pkgname-$pkgver.tar.gz::https://github.com/barjo/ebyt/archive/v$pkgver.tar.gz")
+          sha256sums=('SHA_PLACEHOLDER')
+
+          build() {
+              cd "$pkgname-$pkgver"
+              zig build -Doptimize=ReleaseSafe
+          }
+
+          package() {
+              cd "$pkgname-$pkgver"
+              install -Dm755 zig-out/bin/ebyt "$pkgdir/usr/bin/ebyt"
+              install -Dm644 ebyt.service "$pkgdir/usr/lib/systemd/user/ebyt.service"
+          }
+          EOF
+          sed -i 's/^          //' PKGBUILD
+          sed -i "s/VERSION_PLACEHOLDER/$VERSION/" PKGBUILD
+          sed -i "s/SHA_PLACEHOLDER/$SRC_SHA/" PKGBUILD
+
+      - name: Generate ebyt-bin PKGBUILD
+        run: |
+          VERSION=${{ steps.meta.outputs.version }}
+          BIN_SHA=${{ steps.meta.outputs.bin_sha }}
+          SVC_SHA=${{ steps.meta.outputs.svc_sha }}
+          cat > PKGBUILD-bin <<'EOF'
+          pkgname=ebyt-bin
+          pkgver=VERSION_PLACEHOLDER
+          pkgrel=1
+          pkgdesc='Minimal X11 activity tracker (prebuilt binary)'
+          arch=('x86_64')
+          url='https://github.com/barjo/ebyt'
+          license=('Apache-2.0')
+          depends=('libx11' 'libxi' 'sqlite')
+          provides=('ebyt')
+          conflicts=('ebyt')
+          options=(!debug)
+          source=("ebyt-$pkgver::https://github.com/barjo/ebyt/releases/download/v$pkgver/ebyt"
+                  "ebyt.service::https://raw.githubusercontent.com/barjo/ebyt/v$pkgver/ebyt.service")
+          sha256sums=('BIN_SHA_PLACEHOLDER'
+                      'SVC_SHA_PLACEHOLDER')
+
+          package() {
+              install -Dm755 "$srcdir/ebyt-$pkgver" "$pkgdir/usr/bin/ebyt"
+              install -Dm644 "$srcdir/ebyt.service" "$pkgdir/usr/lib/systemd/user/ebyt.service"
+          }
+          EOF
+          sed -i 's/^          //' PKGBUILD-bin
+          sed -i "s/VERSION_PLACEHOLDER/$VERSION/" PKGBUILD-bin
+          sed -i "s/BIN_SHA_PLACEHOLDER/$BIN_SHA/" PKGBUILD-bin
+          sed -i "s/SVC_SHA_PLACEHOLDER/$SVC_SHA/" PKGBUILD-bin
+
+      - name: Publish ebyt to AUR
+        uses: KSXGitHub/github-actions-deploy-aur@v3.0.1
+        with:
+          pkgname: ebyt
+          pkgbuild: ./PKGBUILD
+          commit_username: barjo
+          commit_email: barjo@users.noreply.github.com
+          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+
+      - name: Publish ebyt-bin to AUR
+        uses: KSXGitHub/github-actions-deploy-aur@v3.0.1
+        with:
+          pkgname: ebyt-bin
+          pkgbuild: ./PKGBUILD-bin
+          commit_username: barjo
+          commit_email: barjo@users.noreply.github.com
+          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
