@@ -112,7 +112,7 @@ jobs:
           sed -i "s/SVC_SHA_PLACEHOLDER/$SVC_SHA/" PKGBUILD-bin
 
       - name: Publish ebyt to AUR
-        uses: KSXGitHub/github-actions-deploy-aur@v3.0.1
+        uses: KSXGitHub/github-actions-deploy-aur@v4.1.1
         with:
           pkgname: ebyt
           pkgbuild: ./PKGBUILD
@@ -121,7 +121,7 @@ jobs:
           ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
 
       - name: Publish ebyt-bin to AUR
-        uses: KSXGitHub/github-actions-deploy-aur@v3.0.1
+        uses: KSXGitHub/github-actions-deploy-aur@v4.1.1
         with:
           pkgname: ebyt-bin
           pkgbuild: ./PKGBUILD-bin
