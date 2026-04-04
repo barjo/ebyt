@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read Zig version
+        id: zig-version
+        run: echo "version=$(grep '^zig ' .tool-versions | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: ${{ steps.zig-version.outputs.version }}
+
+      - name: Install dependencies
+        run: sudo apt-get install -y libx11-dev libxi-dev libsqlite3-dev
+
+      - name: Check format
+        run: zig fmt --check src/
+
+      - name: Run tests
+        run: zig build test
