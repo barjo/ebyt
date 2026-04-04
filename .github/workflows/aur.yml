@@ -52,7 +52,7 @@ jobs:
           pkgname=ebyt
           pkgver=VERSION_PLACEHOLDER
           pkgrel=1
-          pkgdesc='Minimal X11 activity tracker'
+          pkgdesc="Minimal X11 activity tracker"
           arch=('x86_64')
           url='https://github.com/barjo/ebyt'
           license=('Apache-2.0')
@@ -88,7 +88,7 @@ jobs:
           pkgname=ebyt-bin
           pkgver=VERSION_PLACEHOLDER
           pkgrel=1
-          pkgdesc='Minimal X11 activity tracker (prebuilt binary)'
+          pkgdesc="Minimal X11 activity tracker (prebuilt binary)"
           arch=('x86_64')
           url='https://github.com/barjo/ebyt'
           license=('Apache-2.0')
@@ -96,10 +96,8 @@ jobs:
           provides=('ebyt')
           conflicts=('ebyt')
           options=(!debug)
-          source=("ebyt-$pkgver::https://github.com/barjo/ebyt/releases/download/v$pkgver/ebyt"
-                  "ebyt.service::https://raw.githubusercontent.com/barjo/ebyt/v$pkgver/ebyt.service")
-          sha256sums=('BIN_SHA_PLACEHOLDER'
-                      'SVC_SHA_PLACEHOLDER')
+          source=("ebyt-$pkgver::https://github.com/barjo/ebyt/releases/download/v$pkgver/ebyt" "ebyt.service::https://raw.githubusercontent.com/barjo/ebyt/v$pkgver/ebyt.service")
+          sha256sums=('BIN_SHA_PLACEHOLDER' 'SVC_SHA_PLACEHOLDER')
 
           package() {
               install -Dm755 "$srcdir/ebyt-$pkgver" "$pkgdir/usr/bin/ebyt"
@@ -111,20 +109,61 @@ jobs:
           sed -i "s/BIN_SHA_PLACEHOLDER/$BIN_SHA/" PKGBUILD-bin
           sed -i "s/SVC_SHA_PLACEHOLDER/$SVC_SHA/" PKGBUILD-bin
 
+      - name: Setup SSH for AUR
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.AUR_SSH_PRIVATE_KEY }}" > ~/.ssh/aur
+          chmod 600 ~/.ssh/aur
+          ssh-keyscan -t ed25519 aur.archlinux.org >> ~/.ssh/known_hosts
+          printf 'Host aur.archlinux.org\n  IdentityFile ~/.ssh/aur\n  User aur\n' >> ~/.ssh/config
+
+      - name: Generate .SRCINFO files
+        run: |
+          gen_srcinfo() {(
+            local pkg="$1"
+            eval "$(grep -E '^(pkgname|pkgver|pkgrel|pkgdesc|url|license)=' "$pkg")"
+            eval "$(grep -E '^(arch|depends|makedepends|provides|conflicts|options|source|sha256sums)=' "$pkg")"
+            local T=$'\t'
+            echo "pkgbase = ${pkgname}"
+            echo "${T}pkgdesc = ${pkgdesc}"
+            echo "${T}pkgver = ${pkgver}"
+            echo "${T}pkgrel = ${pkgrel}"
+            echo "${T}url = ${url}"
+            for a in "${arch[@]}"; do echo "${T}arch = ${a}"; done
+            echo "${T}license = ${license}"
+            for d in "${makedepends[@]}"; do echo "${T}makedepends = ${d}"; done
+            for d in "${depends[@]}"; do echo "${T}depends = ${d}"; done
+            for p in "${provides[@]}"; do echo "${T}provides = ${p}"; done
+            for c in "${conflicts[@]}"; do echo "${T}conflicts = ${c}"; done
+            for o in "${options[@]}"; do echo "${T}options = ${o}"; done
+            for s in "${source[@]}"; do echo "${T}source = ${s}"; done
+            for s in "${sha256sums[@]}"; do echo "${T}sha256sums = ${s}"; done
+            echo ""
+            echo "pkgname = ${pkgname}"
+          )}
+          gen_srcinfo PKGBUILD > SRCINFO-ebyt
+          gen_srcinfo PKGBUILD-bin > SRCINFO-bin
+
       - name: Publish ebyt to AUR
-        uses: KSXGitHub/github-actions-deploy-aur@v4.1.1
-        with:
-          pkgname: ebyt
-          pkgbuild: ./PKGBUILD
-          commit_username: barjo
-          commit_email: barjo@users.noreply.github.com
-          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+        run: |
+          VERSION=${{ steps.meta.outputs.version }}
+          git clone ssh://aur@aur.archlinux.org/ebyt.git /tmp/aur-ebyt
+          cp PKGBUILD /tmp/aur-ebyt/
+          cp SRCINFO-ebyt /tmp/aur-ebyt/.SRCINFO
+          cd /tmp/aur-ebyt
+          git config user.name "barjo"
+          git config user.email "barjo@users.noreply.github.com"
+          git add PKGBUILD .SRCINFO
+          git diff --cached --quiet || (git commit -m "Update to ${VERSION}" && git push)
 
       - name: Publish ebyt-bin to AUR
-        uses: KSXGitHub/github-actions-deploy-aur@v4.1.1
-        with:
-          pkgname: ebyt-bin
-          pkgbuild: ./PKGBUILD-bin
-          commit_username: barjo
-          commit_email: barjo@users.noreply.github.com
-          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+        run: |
+          VERSION=${{ steps.meta.outputs.version }}
+          git clone ssh://aur@aur.archlinux.org/ebyt-bin.git /tmp/aur-ebyt-bin
+          cp PKGBUILD-bin /tmp/aur-ebyt-bin/PKGBUILD
+          cp SRCINFO-bin /tmp/aur-ebyt-bin/.SRCINFO
+          cd /tmp/aur-ebyt-bin
+          git config user.name "barjo"
+          git config user.email "barjo@users.noreply.github.com"
+          git add PKGBUILD .SRCINFO
+          git diff --cached --quiet || (git commit -m "Update to ${VERSION}" && git push)
