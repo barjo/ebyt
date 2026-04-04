@@ -1,5 +1,7 @@
 # EBYT — Every Byte You Track
 
+[![CI](https://github.com/barjo/ebyt/actions/workflows/ci.yml/badge.svg)](https://github.com/barjo/ebyt/actions/workflows/ci.yml)
+
 > "Every move you make, every byte you track..."
 
 Minimal X11 activity tracker. Logs which window is focused, for how long, and when you're AFK. Data goes into SQLite. That's it.
@@ -24,7 +26,7 @@ zig build
 zig build -Doptimize=ReleaseSafe  # optimized binary
 ```
 
-Binary goes to `zig-out/bin/ebyt`.
+Binary goes to `zig-out/bin/ebyt`. Prebuilt binaries are available on the [releases page](https://github.com/barjo/ebyt/releases).
 
 ## Usage
 
