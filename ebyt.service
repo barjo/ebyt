@@ -3,7 +3,7 @@ Description=EBYT — Every Byte You Track (activity tracker)
 After=graphical-session.target
 
 [Service]
-ExecStart=%h/.local/bin/ebyt daemon
+ExecStart=/usr/bin/ebyt daemon
 Restart=on-failure
 RestartSec=5
 

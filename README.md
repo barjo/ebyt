@@ -62,13 +62,20 @@ Report options:
 
 ## Systemd
 
-A user service is included. It expects the binary at `~/.local/bin/ebyt`:
+A user service is included. If installed via the PKGBUILD, just enable it:
+
+```sh
+systemctl --user enable --now ebyt
+```
+
+For manual installs, copy the binary and service yourself:
 
 ```sh
 cp zig-out/bin/ebyt ~/.local/bin/
 cp ebyt.service ~/.config/systemd/user/
-systemctl --user enable --now ebyt
 ```
+
+Note: the service expects the binary at `/usr/bin/ebyt`. For `~/.local/bin`, edit `ExecStart` in your local copy.
 
 ## Database
 
