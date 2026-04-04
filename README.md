@@ -19,6 +19,17 @@ Advanced reporting should query the database directly (`sqlite3`, scripts, whate
 
 That's the standard X11 libraries. SQLite is likely already installed on any desktop system.
 
+## Install
+
+On Arch (via AUR):
+
+```sh
+yay -S ebyt-bin   # prebuilt binary
+yay -S ebyt       # build from source
+```
+
+Or grab the binary from the [releases page](https://github.com/barjo/ebyt/releases).
+
 ## Build
 
 ```sh
@@ -26,7 +37,7 @@ zig build
 zig build -Doptimize=ReleaseSafe  # optimized binary
 ```
 
-Binary goes to `zig-out/bin/ebyt`. Prebuilt binaries are available on the [releases page](https://github.com/barjo/ebyt/releases).
+Binary goes to `zig-out/bin/ebyt`.
 
 ## Usage
 
@@ -44,14 +55,14 @@ Polls the active X11 window at a configurable interval (default 5s). Detects AFK
 ### Report
 
 ```
-Activity Report — Today (2026-04-03)
-────────────────────────────────────────────
-  firefox          2h 15m   ████████████░░░░  45%
-  Alacritty        1h 30m   ████████░░░░░░░░  30%
-  code             0h 45m   ████░░░░░░░░░░░░  15%
-  AFK              0h 30m   ██░░░░░░░░░░░░░░  10%
-────────────────────────────────────────────
-  Total tracked:   5h 00m
+  Fri Apr 03, 2026
+
+  firefox                   2h 15m  ▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░  45%
+  Alacritty                 1h 30m  ▓▓▓▓▓▓▓░░░░░░░░░░░░░░░░░  30%
+  code                      0h 45m  ▓▓▓░░░░░░░░░░░░░░░░░░░░░  15%
+  AFK                       0h 30m  ▓▓░░░░░░░░░░░░░░░░░░░░░░  10%
+
+                                                            5h 00m
 ```
 
 Report options:
@@ -64,20 +75,17 @@ Report options:
 
 ## Systemd
 
-A user service is included. If installed via the PKGBUILD, just enable it:
+A user service is included. The AUR packages install it automatically:
 
 ```sh
 systemctl --user enable --now ebyt
 ```
 
-For manual installs, copy the binary and service yourself:
+For manual installs, the service expects the binary at `/usr/bin/ebyt`:
 
 ```sh
-cp zig-out/bin/ebyt ~/.local/bin/
 cp ebyt.service ~/.config/systemd/user/
 ```
-
-Note: the service expects the binary at `/usr/bin/ebyt`. For `~/.local/bin`, edit `ExecStart` in your local copy.
 
 ## Database
 
