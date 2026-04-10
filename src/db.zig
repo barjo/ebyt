@@ -45,6 +45,14 @@ pub const CsvRow = struct {
     duration: i64 = 0,
 };
 
+fn readColumn(stmt: ?*c.sqlite3_stmt, col: c_int, buf: *[256]u8) usize {
+    const ptr = c.sqlite3_column_text(stmt, col);
+    const len: usize = @intCast(c.sqlite3_column_bytes(stmt, col));
+    const n = @min(len, buf.len);
+    if (ptr) |p| @memcpy(buf[0..n], p[0..n]);
+    return n;
+}
+
 pub const Db = struct {
     handle: *c.sqlite3,
 
@@ -147,22 +155,16 @@ pub const Db = struct {
         _ = c.sqlite3_bind_int64(stmt, 3, from);
         _ = c.sqlite3_bind_int64(stmt, 4, to);
 
-        var rows = std.ArrayList(ReportRow).init(allocator);
+        var rows = std.ArrayList(ReportRow){};
 
         while (c.sqlite3_step(stmt) == c.SQLITE_ROW) {
             var row = ReportRow{};
-            const class_ptr = c.sqlite3_column_text(stmt, 0);
-            const class_len: usize = @intCast(c.sqlite3_column_bytes(stmt, 0));
-            const copy_len = @min(class_len, row.window_class.len);
-            if (class_ptr) |p| {
-                @memcpy(row.window_class[0..copy_len], p[0..copy_len]);
-            }
-            row.class_len = copy_len;
+            row.class_len = readColumn(stmt, 0, &row.window_class);
             row.total_seconds = c.sqlite3_column_int64(stmt, 1);
-            try rows.append(row);
+            try rows.append(allocator, row);
         }
 
-        return rows.toOwnedSlice();
+        return rows.toOwnedSlice(allocator);
     }
 
     /// Query total AFK time in a range.
@@ -223,29 +225,18 @@ pub const Db = struct {
         _ = c.sqlite3_bind_int64(stmt, 4, from);
         _ = c.sqlite3_bind_int64(stmt, 5, to);
 
-        var rows = std.ArrayList(CsvRow).init(allocator);
+        var rows = std.ArrayList(CsvRow){};
 
         while (c.sqlite3_step(stmt) == c.SQLITE_ROW) {
             var row = CsvRow{};
-
-            const class_ptr = c.sqlite3_column_text(stmt, 0);
-            const class_len: usize = @intCast(c.sqlite3_column_bytes(stmt, 0));
-            const cl = @min(class_len, row.window_class.len);
-            if (class_ptr) |p| @memcpy(row.window_class[0..cl], p[0..cl]);
-            row.class_len = cl;
-
-            const title_ptr = c.sqlite3_column_text(stmt, 1);
-            const title_len: usize = @intCast(c.sqlite3_column_bytes(stmt, 1));
-            const tl = @min(title_len, row.window_title.len);
-            if (title_ptr) |p| @memcpy(row.window_title[0..tl], p[0..tl]);
-            row.title_len = tl;
-
+            row.class_len = readColumn(stmt, 0, &row.window_class);
+            row.title_len = readColumn(stmt, 1, &row.window_title);
             row.start_time = c.sqlite3_column_int64(stmt, 2);
             row.duration = c.sqlite3_column_int64(stmt, 3);
-            try rows.append(row);
+            try rows.append(allocator, row);
         }
 
-        return rows.toOwnedSlice();
+        return rows.toOwnedSlice(allocator);
     }
 
     fn queryDetailRows(self: *Db, allocator: std.mem.Allocator, from: i64, to: i64, sql: [*:0]const u8) ![]DetailRow {
@@ -260,28 +251,17 @@ pub const Db = struct {
         _ = c.sqlite3_bind_int64(stmt, 3, from);
         _ = c.sqlite3_bind_int64(stmt, 4, to);
 
-        var rows = std.ArrayList(DetailRow).init(allocator);
+        var rows = std.ArrayList(DetailRow){};
 
         while (c.sqlite3_step(stmt) == c.SQLITE_ROW) {
             var row = DetailRow{};
-
-            const class_ptr = c.sqlite3_column_text(stmt, 0);
-            const class_len: usize = @intCast(c.sqlite3_column_bytes(stmt, 0));
-            const cl = @min(class_len, row.window_class.len);
-            if (class_ptr) |p| @memcpy(row.window_class[0..cl], p[0..cl]);
-            row.class_len = cl;
-
-            const title_ptr = c.sqlite3_column_text(stmt, 1);
-            const title_len: usize = @intCast(c.sqlite3_column_bytes(stmt, 1));
-            const tl = @min(title_len, row.window_title.len);
-            if (title_ptr) |p| @memcpy(row.window_title[0..tl], p[0..tl]);
-            row.title_len = tl;
-
+            row.class_len = readColumn(stmt, 0, &row.window_class);
+            row.title_len = readColumn(stmt, 1, &row.window_title);
             row.total_seconds = c.sqlite3_column_int64(stmt, 2);
-            try rows.append(row);
+            try rows.append(allocator, row);
         }
 
-        return rows.toOwnedSlice();
+        return rows.toOwnedSlice(allocator);
     }
 
     /// Get the most recent activity (for status command).
@@ -330,7 +310,7 @@ pub const Db = struct {
 
         std.fs.cwd().makePath(dir) catch return error.MkDir;
 
-        return try std.fmt.allocPrintZ(allocator, "{s}/ebyt.db", .{dir});
+        return try std.fmt.allocPrintSentinel(allocator, "{s}/ebyt.db", .{dir}, 0);
     }
 
     fn openMemory() !Db {

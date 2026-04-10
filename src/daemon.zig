@@ -17,18 +17,18 @@ pub fn run(allocator: std.mem.Allocator, poll_interval: u32, afk_timeout: u32) !
     _ = posix.signal(posix.SIGTERM, signalHandler);
 
     var display = x11.X11.init() catch |err| {
-        try std.io.getStdErr().writer().print("Failed to connect to X11: {}\n", .{err});
+        try std.fs.File.stderr().deprecatedWriter().print("Failed to connect to X11: {}\n", .{err});
         std.process.exit(1);
     };
     defer display.deinit();
 
     var database = db.Db.open(allocator) catch |err| {
-        try std.io.getStdErr().writer().print("Failed to open database: {}\n", .{err});
+        try std.fs.File.stderr().deprecatedWriter().print("Failed to open database: {}\n", .{err});
         std.process.exit(1);
     };
     defer database.close();
 
-    const stdout = std.io.getStdOut().writer();
+    const stdout = std.fs.File.stdout().deprecatedWriter();
     try stdout.print("ebyt daemon started (poll={d}s, afk={d}s)\n", .{ poll_interval, afk_timeout });
 
     var last_input_time = std.time.timestamp();

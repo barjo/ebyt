@@ -32,7 +32,7 @@ pub fn main() !void {
     defer std.process.argsFree(allocator, args);
 
     if (args.len < 2) {
-        try std.io.getStdErr().writeAll(usage);
+        try std.fs.File.stderr().writeAll(usage);
         std.process.exit(1);
     }
 
@@ -47,17 +47,17 @@ pub fn main() !void {
             if (std.mem.eql(u8, args[i], "--poll") and i + 1 < args.len) {
                 i += 1;
                 poll_interval = std.fmt.parseInt(u32, args[i], 10) catch {
-                    try std.io.getStdErr().writeAll("Error: invalid --poll value\n");
+                    try std.fs.File.stderr().writeAll("Error: invalid --poll value\n");
                     std.process.exit(1);
                 };
             } else if (std.mem.eql(u8, args[i], "--afk-timeout") and i + 1 < args.len) {
                 i += 1;
                 afk_timeout = std.fmt.parseInt(u32, args[i], 10) catch {
-                    try std.io.getStdErr().writeAll("Error: invalid --afk-timeout value\n");
+                    try std.fs.File.stderr().writeAll("Error: invalid --afk-timeout value\n");
                     std.process.exit(1);
                 };
             } else {
-                try std.io.getStdErr().writeAll(usage);
+                try std.fs.File.stderr().writeAll(usage);
                 std.process.exit(1);
             }
         }
@@ -81,7 +81,7 @@ pub fn main() !void {
             } else if (std.mem.eql(u8, args[i], "--csv")) {
                 format = .csv;
             } else {
-                try std.io.getStdErr().writeAll(usage);
+                try std.fs.File.stderr().writeAll(usage);
                 std.process.exit(1);
             }
         }
@@ -90,7 +90,7 @@ pub fn main() !void {
     } else if (std.mem.eql(u8, command, "status")) {
         try report.status(allocator);
     } else {
-        try std.io.getStdErr().writeAll(usage);
+        try std.fs.File.stderr().writeAll(usage);
         std.process.exit(1);
     }
 }

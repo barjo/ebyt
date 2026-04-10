@@ -4,18 +4,20 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const exe = b.addExecutable(.{
-        .name = "ebyt",
+    const mod = b.createModule(.{
         .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
+        .link_libc = true,
     });
+    mod.linkSystemLibrary("x11", .{});
+    mod.linkSystemLibrary("xi", .{});
+    mod.linkSystemLibrary("sqlite3", .{});
 
-    // System C libraries
-    exe.linkLibC();
-    exe.linkSystemLibrary("x11");
-    exe.linkSystemLibrary("xi");
-    exe.linkSystemLibrary("sqlite3");
+    const exe = b.addExecutable(.{
+        .name = "ebyt",
+        .root_module = mod,
+    });
 
     b.installArtifact(exe);
 
@@ -31,14 +33,8 @@ pub fn build(b: *std.Build) void {
 
     // Tests
     const unit_tests = b.addTest(.{
-        .root_source_file = b.path("src/main.zig"),
-        .target = target,
-        .optimize = optimize,
+        .root_module = mod,
     });
-    unit_tests.linkLibC();
-    unit_tests.linkSystemLibrary("x11");
-    unit_tests.linkSystemLibrary("xi");
-    unit_tests.linkSystemLibrary("sqlite3");
 
     const run_unit_tests = b.addRunArtifact(unit_tests);
     const test_step = b.step("test", "Run unit tests");

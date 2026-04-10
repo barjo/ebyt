@@ -24,7 +24,7 @@ pub fn show(allocator: std.mem.Allocator, mode: ReportMode, format: OutputFormat
     const alloc = arena.allocator();
 
     var database = db.Db.open(alloc) catch |err| {
-        try std.io.getStdErr().writer().print("Failed to open database: {}\n", .{err});
+        try std.fs.File.stderr().deprecatedWriter().print("Failed to open database: {}\n", .{err});
         std.process.exit(1);
     };
     defer database.close();
@@ -38,7 +38,7 @@ pub fn show(allocator: std.mem.Allocator, mode: ReportMode, format: OutputFormat
     const afk_seconds = try database.queryAfkTime(from, to);
     const detail_rows = if (format == .detail) try database.queryDetail(alloc, from, to) else &[_]db.DetailRow{};
 
-    const writer = std.io.getStdOut().writer();
+    const writer = std.fs.File.stdout().deprecatedWriter();
     const tty = isatty();
 
     // Header
@@ -94,7 +94,7 @@ fn showCsv(allocator: std.mem.Allocator, mode: ReportMode) !void {
     const alloc = arena.allocator();
 
     var database = db.Db.open(alloc) catch |err| {
-        try std.io.getStdErr().writer().print("Failed to open database: {}\n", .{err});
+        try std.fs.File.stderr().deprecatedWriter().print("Failed to open database: {}\n", .{err});
         std.process.exit(1);
     };
     defer database.close();
@@ -106,7 +106,7 @@ fn showCsv(allocator: std.mem.Allocator, mode: ReportMode) !void {
 
     const rows = try database.queryCsv(alloc, from, to);
 
-    const writer = std.io.getStdOut().writer();
+    const writer = std.fs.File.stdout().deprecatedWriter();
 
     try writer.writeAll("window_class,window_title,start_time,duration(s)\n");
     for (rows) |row| {
@@ -203,12 +203,12 @@ pub fn status(allocator: std.mem.Allocator) !void {
     const alloc = arena.allocator();
 
     var database = db.Db.open(alloc) catch |err| {
-        try std.io.getStdErr().writer().print("Failed to open database: {}\n", .{err});
+        try std.fs.File.stderr().deprecatedWriter().print("Failed to open database: {}\n", .{err});
         std.process.exit(1);
     };
     defer database.close();
 
-    const writer = std.io.getStdOut().writer();
+    const writer = std.fs.File.stdout().deprecatedWriter();
 
     const tty = isatty();
 
@@ -243,7 +243,7 @@ pub fn status(allocator: std.mem.Allocator) !void {
 }
 
 fn isatty() bool {
-    return std.posix.isatty(std.io.getStdOut().handle);
+    return std.posix.isatty(std.fs.File.stdout().handle);
 }
 
 const ansi = struct {
