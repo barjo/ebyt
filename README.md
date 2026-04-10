@@ -71,7 +71,7 @@ Report options:
 - `--week` — show this week's activity
 - `--since YYYY-MM-DD` — show activity since a specific date
 - `--detail` — show top window titles per app
-- `--csv` — output as CSV (class, title, seconds)
+- `--csv` — output as CSV (class, title, start time, duration)
 
 ## Systemd
 

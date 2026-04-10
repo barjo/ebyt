@@ -108,14 +108,14 @@ fn showCsv(allocator: std.mem.Allocator, mode: ReportMode) !void {
 
     const writer = std.io.getStdOut().writer();
 
-    try writer.writeAll("window_class,window_title,seconds\n");
+    try writer.writeAll("window_class,window_title,start_time,duration(s)\n");
     for (rows) |row| {
         const class = row.window_class[0..row.class_len];
         const title = row.window_title[0..row.title_len];
         try writeCsvField(writer, class);
         try writer.writeAll(",");
         try writeCsvField(writer, title);
-        try writer.print(",{d}\n", .{row.total_seconds});
+        try writer.print(",{d},{d}\n", .{ row.start_time, row.duration });
     }
 }
 

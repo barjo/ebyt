@@ -36,6 +36,15 @@ pub const DetailRow = struct {
     total_seconds: i64 = 0,
 };
 
+pub const CsvRow = struct {
+    window_class: [256]u8 = [_]u8{0} ** 256,
+    class_len: usize = 0,
+    window_title: [256]u8 = [_]u8{0} ** 256,
+    title_len: usize = 0,
+    start_time: i64 = 0,
+    duration: i64 = 0,
+};
+
 pub const Db = struct {
     handle: *c.sqlite3,
 
@@ -192,16 +201,51 @@ pub const Db = struct {
         );
     }
 
-    /// Query raw rows for CSV export (class, title, seconds). Includes AFK.
-    pub fn queryCsv(self: *Db, allocator: std.mem.Allocator, from: i64, to: i64) ![]DetailRow {
-        return self.queryDetailRows(allocator, from, to,
+    /// Query individual rows for CSV export (class, title, start_time, duration). Includes AFK.
+    pub fn queryCsv(self: *Db, allocator: std.mem.Allocator, from: i64, to: i64) ![]CsvRow {
+        const sql =
             \\SELECT window_class, window_title,
-            \\       SUM(MIN(end_time, ?) - MAX(start_time, ?)) as total
+            \\       MAX(start_time, ?) as clamped_start,
+            \\       MIN(end_time, ?) - MAX(start_time, ?) as duration
             \\FROM activities
             \\WHERE end_time > ? AND start_time < ?
-            \\GROUP BY window_class, window_title
-            \\ORDER BY total DESC
-        );
+            \\ORDER BY start_time ASC
+        ;
+        var stmt: ?*c.sqlite3_stmt = null;
+        if (c.sqlite3_prepare_v2(self.handle, sql, -1, &stmt, null) != c.SQLITE_OK) {
+            return error.DbPrepare;
+        }
+        defer _ = c.sqlite3_finalize(stmt);
+
+        _ = c.sqlite3_bind_int64(stmt, 1, from);
+        _ = c.sqlite3_bind_int64(stmt, 2, to);
+        _ = c.sqlite3_bind_int64(stmt, 3, from);
+        _ = c.sqlite3_bind_int64(stmt, 4, from);
+        _ = c.sqlite3_bind_int64(stmt, 5, to);
+
+        var rows = std.ArrayList(CsvRow).init(allocator);
+
+        while (c.sqlite3_step(stmt) == c.SQLITE_ROW) {
+            var row = CsvRow{};
+
+            const class_ptr = c.sqlite3_column_text(stmt, 0);
+            const class_len: usize = @intCast(c.sqlite3_column_bytes(stmt, 0));
+            const cl = @min(class_len, row.window_class.len);
+            if (class_ptr) |p| @memcpy(row.window_class[0..cl], p[0..cl]);
+            row.class_len = cl;
+
+            const title_ptr = c.sqlite3_column_text(stmt, 1);
+            const title_len: usize = @intCast(c.sqlite3_column_bytes(stmt, 1));
+            const tl = @min(title_len, row.window_title.len);
+            if (title_ptr) |p| @memcpy(row.window_title[0..tl], p[0..tl]);
+            row.title_len = tl;
+
+            row.start_time = c.sqlite3_column_int64(stmt, 2);
+            row.duration = c.sqlite3_column_int64(stmt, 3);
+            try rows.append(row);
+        }
+
+        return rows.toOwnedSlice();
     }
 
     fn queryDetailRows(self: *Db, allocator: std.mem.Allocator, from: i64, to: i64, sql: [*:0]const u8) ![]DetailRow {
