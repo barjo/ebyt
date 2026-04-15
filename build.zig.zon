@@ -1,8 +1,14 @@
 .{
     .name = .ebyt,
-    .version = "0.2.0",
+    .version = "0.3.0",
     .fingerprint = 0xcf7ab0f9100bc1de,
     .minimum_zig_version = "0.15.0",
+    .dependencies = .{
+        .zigzag = .{
+            .url = "https://github.com/meszmate/zigzag/archive/refs/tags/v0.1.2.tar.gz",
+            .hash = "zigzag-0.1.2-YXwYS8uVDwAQjlyYYtD7Is6MtmyLRbSyQ6fznFBJmExY",
+        },
+    },
     .paths = .{
         "build.zig",
         "build.zig.zon",

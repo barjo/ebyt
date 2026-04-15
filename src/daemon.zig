@@ -16,20 +16,16 @@ pub fn run(allocator: std.mem.Allocator, poll_interval: u32, afk_timeout: u32) !
     _ = posix.signal(posix.SIGINT, signalHandler);
     _ = posix.signal(posix.SIGTERM, signalHandler);
 
-    var display = x11.X11.init() catch |err| {
-        try std.fs.File.stderr().deprecatedWriter().print("Failed to connect to X11: {}\n", .{err});
-        std.process.exit(1);
-    };
+    var display = try x11.X11.init();
     defer display.deinit();
 
-    var database = db.Db.open(allocator) catch |err| {
-        try std.fs.File.stderr().deprecatedWriter().print("Failed to open database: {}\n", .{err});
-        std.process.exit(1);
-    };
+    var database = try db.Db.open(allocator);
     defer database.close();
 
-    const stdout = std.fs.File.stdout().deprecatedWriter();
-    try stdout.print("ebyt daemon started (poll={d}s, afk={d}s)\n", .{ poll_interval, afk_timeout });
+    var stdout_buf: [256]u8 = undefined;
+    var stdout = std.fs.File.stdout().writer(&stdout_buf);
+    try stdout.interface.print("ebyt daemon started (poll={d}s, afk={d}s)\n", .{ poll_interval, afk_timeout });
+    try stdout.interface.flush();
 
     var last_input_time = std.time.timestamp();
     var current_id: ?i64 = null;
@@ -84,5 +80,6 @@ pub fn run(allocator: std.mem.Allocator, poll_interval: u32, afk_timeout: u32) !
         std.Thread.sleep(@as(u64, poll_interval) * std.time.ns_per_s);
     }
 
-    try stdout.writeAll("ebyt daemon stopped\n");
+    try stdout.interface.writeAll("ebyt daemon stopped\n");
+    try stdout.interface.flush();
 }

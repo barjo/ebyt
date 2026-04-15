@@ -4,11 +4,19 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    const zigzag = b.dependency("zigzag", .{
+        .target = target,
+        .optimize = optimize,
+    });
+
     const mod = b.createModule(.{
         .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
         .link_libc = true,
+        .imports = &.{
+            .{ .name = "zigzag", .module = zigzag.module("zigzag") },
+        },
     });
     mod.linkSystemLibrary("x11", .{});
     mod.linkSystemLibrary("xi", .{});

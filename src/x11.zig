@@ -239,7 +239,7 @@ pub const X11 = struct {
     }
 };
 
-// --- tests ---
+// -- tests --
 
 test "xiSetMask sets correct bits" {
     var mask = [_]u8{0} ** 4;

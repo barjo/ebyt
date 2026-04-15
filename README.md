@@ -6,9 +6,11 @@
 
 Minimal X11 activity tracker. Logs which window is focused, for how long, and when you're AFK. Data goes into SQLite. That's it.
 
+![demo](assets/demo.gif)
+
 For full-featured activity tracking with broader support, see [ActivityWatch](https://activitywatch.net/) or [arbtt](https://arbtt.nomeata.de/).
 ebyt intentionally stays small, X11 only, SQLite only, no plugins, no config files.
-Advanced reporting should query the database directly (`sqlite3`, scripts, whatever you prefer).
+Use the built-in TUI for interactive browsing, or query the database directly (`sqlite3`, scripts, whatever you prefer).
 
 ## Dependencies
 
@@ -16,8 +18,9 @@ Advanced reporting should query the database directly (`sqlite3`, scripts, whate
 - **libX11** — active window detection (`WM_CLASS`, `_NET_WM_NAME`)
 - **libXi** — XInput2 raw events for AFK detection
 - **libsqlite3** — local database
+- **[zigzag](https://github.com/meszmate/zigzag)** — TUI framework (fetched automatically by `zig build`)
 
-That's the standard X11 libraries. SQLite is likely already installed on any desktop system.
+The system libraries (X11, Xi, sqlite3) are standard on most Linux desktops.
 
 ## Install
 
@@ -43,8 +46,8 @@ Binary goes to `zig-out/bin/ebyt`.
 
 ```
 ebyt daemon [--poll 5] [--afk-timeout 300]    # start daemon (foreground)
-ebyt report [--today|--week|--since DATE]     # show time report
-            [--detail] [--csv]
+ebyt tui                                      # interactive dashboard
+ebyt export [--today|--week|--since DATE]     # export as CSV
 ebyt status                                   # current window + tracking uptime
 ```
 
@@ -52,26 +55,21 @@ ebyt status                                   # current window + tracking uptime
 
 Polls the active X11 window at a configurable interval (default 5s). Detects AFK after a configurable timeout (default 300s) using XInput2 raw input events. Shuts down gracefully on SIGINT/SIGTERM.
 
-### Report
+### TUI
 
+Interactive terminal dashboard built with [zigzag](https://github.com/meszmate/zigzag). Day and week views with stacked active/AFK bar charts, per-app breakdowns with expandable window titles, and vim-style navigation.
+
+### Export
+
+CSV export for scripting and external tools:
+
+```sh
+ebyt export                       # today's activity
+ebyt export --week                # this week
+ebyt export --since 2026-01-01    # since a specific date
 ```
-  Fri Apr 03, 2026
 
-  firefox                   2h 15m  ▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░  45%
-  Alacritty                 1h 30m  ▓▓▓▓▓▓▓░░░░░░░░░░░░░░░░░  30%
-  code                      0h 45m  ▓▓▓░░░░░░░░░░░░░░░░░░░░░  15%
-  AFK                       0h 30m  ▓▓░░░░░░░░░░░░░░░░░░░░░░  10%
-
-                                                            5h 00m
-```
-
-Report options:
-
-- `--today` — show today's activity (default)
-- `--week` — show this week's activity
-- `--since YYYY-MM-DD` — show activity since a specific date
-- `--detail` — show top window titles per app
-- `--csv` — output as CSV (class, title, start time, duration in seconds)
+Output: `window_class,window_title,start_time,duration(s)`
 
 ## Systemd
 

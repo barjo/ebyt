@@ -45,6 +45,12 @@ pub const CsvRow = struct {
     duration: i64 = 0,
 };
 
+pub const Interval = struct {
+    start_time: i64,
+    end_time: i64,
+    afk: bool,
+};
+
 fn readColumn(stmt: ?*c.sqlite3_stmt, col: c_int, buf: *[256]u8) usize {
     const ptr = c.sqlite3_column_text(stmt, col);
     const len: usize = @intCast(c.sqlite3_column_bytes(stmt, col));
@@ -58,6 +64,7 @@ pub const Db = struct {
 
     pub fn open(allocator: std.mem.Allocator) !Db {
         const db_path = try getDbPath(allocator);
+        defer allocator.free(db_path);
 
         var handle: ?*c.sqlite3 = null;
         if (c.sqlite3_open(db_path.ptr, &handle) != c.SQLITE_OK) {
@@ -239,6 +246,36 @@ pub const Db = struct {
         return rows.toOwnedSlice(allocator);
     }
 
+    /// Query raw activity intervals for hourly/daily bucketing in the TUI.
+    pub fn queryIntervals(self: *Db, allocator: std.mem.Allocator, from: i64, to: i64) ![]Interval {
+        const sql =
+            \\SELECT MAX(start_time, ?) as s, MIN(end_time, ?) as e, afk
+            \\FROM activities
+            \\WHERE end_time > ? AND start_time < ?
+            \\ORDER BY start_time ASC
+        ;
+        var stmt: ?*c.sqlite3_stmt = null;
+        if (c.sqlite3_prepare_v2(self.handle, sql, -1, &stmt, null) != c.SQLITE_OK) {
+            return error.DbPrepare;
+        }
+        defer _ = c.sqlite3_finalize(stmt);
+
+        _ = c.sqlite3_bind_int64(stmt, 1, from);
+        _ = c.sqlite3_bind_int64(stmt, 2, to);
+        _ = c.sqlite3_bind_int64(stmt, 3, from);
+        _ = c.sqlite3_bind_int64(stmt, 4, to);
+
+        var rows = std.ArrayList(Interval){};
+        while (c.sqlite3_step(stmt) == c.SQLITE_ROW) {
+            try rows.append(allocator, .{
+                .start_time = c.sqlite3_column_int64(stmt, 0),
+                .end_time = c.sqlite3_column_int64(stmt, 1),
+                .afk = c.sqlite3_column_int(stmt, 2) != 0,
+            });
+        }
+        return rows.toOwnedSlice(allocator);
+    }
+
     fn queryDetailRows(self: *Db, allocator: std.mem.Allocator, from: i64, to: i64, sql: [*:0]const u8) ![]DetailRow {
         var stmt: ?*c.sqlite3_stmt = null;
         if (c.sqlite3_prepare_v2(self.handle, sql, -1, &stmt, null) != c.SQLITE_OK) {
@@ -325,7 +362,7 @@ pub const Db = struct {
     }
 };
 
-// --- tests ---
+// -- tests --
 
 test "insert and extend activity" {
     var database = try Db.openMemory();
@@ -368,4 +405,57 @@ test "queryAfkTime only counts afk rows" {
 
     const afk = try database.queryAfkTime(0, 2000);
     try std.testing.expectEqual(@as(i64, 60), afk);
+}
+
+test "queryIntervals returns clamped intervals" {
+    var database = try Db.openMemory();
+    defer database.close();
+
+    // Activity from 1000-1060 (active), 1060-1120 (afk)
+    _ = try database.insertActivity("firefox", "tab1", 1000, false);
+    try database.extendActivity(1, 1060);
+    _ = try database.insertActivity("AFK", "", 1060, true);
+    try database.extendActivity(2, 1120);
+
+    const alloc = std.testing.allocator;
+
+    // Full range: both intervals returned
+    const all = try database.queryIntervals(alloc, 0, 2000);
+    defer alloc.free(all);
+    try std.testing.expectEqual(@as(usize, 2), all.len);
+    try std.testing.expectEqual(@as(i64, 1000), all[0].start_time);
+    try std.testing.expectEqual(@as(i64, 1060), all[0].end_time);
+    try std.testing.expect(!all[0].afk);
+    try std.testing.expectEqual(@as(i64, 1060), all[1].start_time);
+    try std.testing.expectEqual(@as(i64, 1120), all[1].end_time);
+    try std.testing.expect(all[1].afk);
+
+    // Clamped range: query 1030-1090 clamps both intervals
+    const clamped = try database.queryIntervals(alloc, 1030, 1090);
+    defer alloc.free(clamped);
+    try std.testing.expectEqual(@as(usize, 2), clamped.len);
+    try std.testing.expectEqual(@as(i64, 1030), clamped[0].start_time);
+    try std.testing.expectEqual(@as(i64, 1060), clamped[0].end_time);
+    try std.testing.expectEqual(@as(i64, 1060), clamped[1].start_time);
+    try std.testing.expectEqual(@as(i64, 1090), clamped[1].end_time);
+}
+
+test "queryCsv returns rows with duration" {
+    var database = try Db.openMemory();
+    defer database.close();
+
+    _ = try database.insertActivity("firefox", "GitHub", 1000, false);
+    try database.extendActivity(1, 1060);
+    _ = try database.insertActivity("AFK", "", 1060, true);
+    try database.extendActivity(2, 1120);
+
+    const alloc = std.testing.allocator;
+    const rows = try database.queryCsv(alloc, 0, 2000);
+    defer alloc.free(rows);
+
+    try std.testing.expectEqual(@as(usize, 2), rows.len);
+    try std.testing.expectEqualStrings("firefox", rows[0].window_class[0..rows[0].class_len]);
+    try std.testing.expectEqual(@as(i64, 60), rows[0].duration);
+    try std.testing.expectEqualStrings("AFK", rows[1].window_class[0..rows[1].class_len]);
+    try std.testing.expectEqual(@as(i64, 60), rows[1].duration);
 }
